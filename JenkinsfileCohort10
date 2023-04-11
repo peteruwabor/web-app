@@ -1,0 +1,54 @@
+pipeline{
+  agent { label 'Node1'}
+  tools {
+    maven 'maven3.8.6'
+  }
+  options {
+    timeout(time: 20, unit:"MINUTES")
+  }
+  stages {
+    stage('Cloning'){
+      steps {
+        echo 'Cloning from GitHub'
+        git credentialsId: 'GitHub_Credentials', url: 'https://github.com/peteruwabor/web-app.git'
+        echo 'Cloning done'
+      }
+    }
+    stage('Building'){
+      steps {
+        echo "packaging our artifact"
+        sh 'mvn package'
+        echo "Packing done"
+      }
+    }
+    stage('Testing'){
+      steps {
+        echo 'Testing with Sonarqube'
+        sh 'mvn sonar:sonar'
+        echo 'Testing done'
+      }
+    }
+    stage('Deploying'){
+      steps {
+        echo 'Deploying to nexus'
+        sh 'mvn deploy'
+        echo 'Deploying done'
+      }
+    }
+    stage('Approval'){
+      steps {
+        echo "Seeking Approval"
+        timeout(time: 5, unit: "DAYS"){
+        input message: 'Approve to production'
+        }
+      }
+    }
+    stage('Tomcat'){
+      steps {
+        echo 'Pushing to Tomcat'
+        deploy adapters: [tomcat9(credentialsId: 'tomcat-cred', path: '', url: 'http://3.85.54.23:7000/')], contextPath: null, war: 'target/*.war'
+        echo 'Done'
+      }
+    }
+  }
+}
