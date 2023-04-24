@@ -1,23 +1,76 @@
-node{
-    def MHD = tool name: "maven3.8.4"
-    stage('code'){
-        git branch: 'development', url: 'https://github.com/team16flight/web-app.git'
+pipeline{
+  agent any
+  tools {
+    maven 'maven3.8.6'
+  }
+  environment {
+        DOCKER_IMAGE = 'peteruwabor/cohort10:1'
     }
-    stage('BUILD'){
-       sh "${MHD}/bin/mvn clean package"
- 
+  options {
+    timeout(time: 20, unit:"MINUTES")
+  }
+  stages {
+    stage('Cloning'){
+      steps {
+        echo 'Cloning from GitHub'
+        git credentialsId: 'git_cred', url: 'https://github.com/peteruwabor/web-app.git'
+        echo 'Cloning done'
+      }
     }
-    /*
-    stage('deploy'){
-  sshagent(['tomcat']) {
-  sh "scp -o StrictHostKeyChecking=no target/*war ec2-user@172.31.15.31:/opt/tomcat9/webapps/"
-}
-}
-stage('email'){
-emailext body: '''Build is over
+    stage('Building'){
+      steps {
+        echo "packaging our artifact"
+        sh 'mvn clean package'
+        echo "Packing done"
+      }
+    }
+    stage('Testing'){
+      steps {
+        echo 'Testing with Sonarqube'
+        sh 'mvn sonar:sonar'
+        echo 'Testing done'
+      }
+    }
+    stage('Deploying'){
+      steps {
+        echo 'Deploying to nexus'
+        sh 'mvn deploy'
+        echo 'Deploying done'
+      }
+    }
+    stage('Approval'){
+      steps {
+        echo "Seeking Approval"
+        timeout(time: 5, unit: "DAYS"){
+        input message: 'Approve to production'
+        }
+      }
+    }
+ /*   stage('Build Docker Image') {
+            steps {
+                script {
+                    def commit = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+                    dockerImage = docker.build("${DOCKER_IMAGE}:${commit}", '.')
+                }
+            }
+        }
+    stage('Push Docker Image') {
+        steps {
+            script {
+                docker.withRegistry('https://registry.hub.docker.com', 'dockerhub_cred') {
+                        dockerImage.push("${commit}")
+                        dockerImage.push('latest')
+                }
+            }
+        }
+    } */
 
-Acada
-437212483''', recipientProviders: [developers(), requestor()], subject: 'Build', to: 'tdapp@gmail.com'
-}
-    */
+    stage('Tomcat'){
+      steps {
+        echo 'Pushing to Tomcat'
+        deploy adapters: [tomcat8(credentialsId: 'tomcat8_cred', path: '', url: 'http://172.31.88.139:7000/')], contextPath: null, war: 'target/*.war'
+        echo 'Done'
+      }
+    }
+  }
 }
